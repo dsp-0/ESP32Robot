@@ -182,6 +182,10 @@ void setup() {
   L_stepper.autoPower(true);
   R_stepper.autoPower(true);
   R_stepper.reverse(true);
+  L_stepper.setMaxSpeed(2038);
+  L_stepper.setAcceleration(8152);
+  R_stepper.setMaxSpeed(2038);
+  R_stepper.setAcceleration(8152);
 
   myservo.attach(SERVO);
   myservo.write(20);
