@@ -1,7 +1,7 @@
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
-//#include <Preferences.h>
+#include <Preferences.h>
 #include <memory>
 
 #include <Freenove_WS2812_Lib_for_ESP32.h>
@@ -33,7 +33,7 @@ uint16_t prog_len=0;
 
 std::atomic_flag progReady;
 std::atomic_flag connected;
-//Preferences preferences;
+Preferences preferences;
 
 
 class MyServerCallbacks: public BLEServerCallbacks {
@@ -90,12 +90,14 @@ bool line(int32_t mm){ //100мм = 360 градусов = 2038 steps
   return true;
 }
 
+uint16_t cDegInAngle;
+
 bool angle(int32_t deg){ //314mm - l O between wheel = 360 градусов
   Serial.print("Angle ");
   Serial.println(deg);
 //  setRGB(0,255,255,0);
-  L_stepper.setTarget(deg*314*cSteps/(360*100),RELATIVE);
-  R_stepper.setTarget(-deg*314*cSteps/(360*100),RELATIVE);
+  L_stepper.setTarget(deg*cDegInAngle*cSteps/(360*100),RELATIVE);
+  R_stepper.setTarget(-deg*cDegInAngle*cSteps/(360*100),RELATIVE);
   waitForFinish();
 //  setRGB(0,0,0,0);
   return true;
@@ -122,6 +124,12 @@ bool setRGB(uint8_t num, uint8_t r, uint8_t g, uint8_t b){
   return true;
 }
 
+bool showError(){
+  setRGB(0,5,0,0);
+  setRGB(1,0,0,0);
+  return 1;
+}
+
 //union Cmd{
 //  uint16_t d;
 //  struct{uint16_t command:2; int16_t data:14;} s;
@@ -137,15 +145,40 @@ bool run(){
   setRGB(1,0,170,255);
   auto p=prog;
   for(int i=0;i<prog_len/2;p++,i++){
-    uint16_t cmd=*p>>14;
-    int16_t data=(*p<<2);
-    data>>=2;
+/*
+    if (*p&0xC000==0)  // Цикл
+    else if(*p&0xFC00==0x7000) // Условный вход в подпрограмму
+    else if(*p&0xFC00==0x7400) // Условный переход
+    else if(*p&0xFC00==0x7800) // Вход в подпрограмму
+    else if(*p&0xFC00==0x7C00) // Безусловный переход
+*/
+    if(*p&0x8000==0) if(showError()) break;
+    else if(*p&0xFC00==0x8000) line((int16_t(*p<<6))>>6); // Движение вперед/назад
+    else if(*p&0xFE00==0x8400) angle((int16_t(*p<<7))>>7); // Поворот вправо/влево
+    else if(*p&0xFFFE==0x87FE) feather(!!(*p&1)); // Поднять/опустить перо
+    else if(*p==0x87FC){ // Принять настройки
+      auto tmp = (char*)(p+1);
+      auto param=tmp;
+      tmp+=strlen(param)+1;
+      if(param[0]=='n') preferences.putString(param,tmp);
+      else preferences.putShort(param,*(uint16_t*)tmp);
+      break;
+    }
+    else if(*p&0xC000==0xC000){ // Это цвет глаз
+      uint16_t data=*p;
+      uint8_t num=*p&0x2000;
+      uint8_t tmp=(data>>9)& 0xF;
+      uint8_t r=rbtable[tmp];
+      tmp=(data>>4)& 0x1F;
+      uint8_t g=gtable[tmp];
+      tmp=data& 0xF;
+      uint8_t b=rbtable[tmp];
+      Serial.print("LED "); Serial.print(num); Serial.print(" "); Serial.print(r); Serial.print(" "); Serial.print(g); Serial.print(" "); Serial.println(b);
+      setRGB(!num,r,g,b);
+    }
+    else if(showError()) break; // Это ошибочный код 
 
-    Serial.print("Command ");
-    Serial.print(cmd);
-    Serial.print(" data ");
-    Serial.println(data);
-    switch (cmd){
+/*
     case CMD_LINE:
       line(data);
       break;
@@ -166,7 +199,7 @@ bool run(){
       Serial.print("LED "); Serial.print(num); Serial.print(" "); Serial.print(r); Serial.print(" "); Serial.print(g); Serial.print(" "); Serial.println(b);
       setRGB(!num,r,g,b);
       break;
-    }
+    }*/
   }
   feather(1);
   setRGB(0,255,175,0);
@@ -175,7 +208,7 @@ bool run(){
 }
 
 void setup() {
-//  preferences.begin("lamp");
+  preferences.begin("settings");
   Serial.begin(115200);
   strip.begin();
 
@@ -195,7 +228,8 @@ void setup() {
   setRGB(0,255,175,0);
   setRGB(1,255,175,0);
 
-  //uint32_t settings=preferences.getUInt("s",2565);
+  String name = preferences.getString("name", "Clear Turtle");
+  cDegInAngle=preferences.getUShort("cDegInAngle",314);
 
   BLEDevice::init("Green Dragon"); //Red Knight Green Dragon
   BLEServer *pServer = BLEDevice::createServer();
