@@ -64,10 +64,10 @@ class MyCallbacks: public BLECharacteristicCallbacks {
   }
 };
 
-GStepper2<STEPPER4WIRE> L_stepper(2038, ML_D1, ML_D3, ML_D2, ML_D4);
-GStepper2<STEPPER4WIRE> R_stepper(2038, MR_D1, MR_D3, MR_D2, MR_D4);
-const int cSteps=2038;
+const int cSteps=4076;
 const int cMm=100;
+GStepper2<STEPPER4WIRE_HALF> L_stepper(cSteps, ML_D1, ML_D3, ML_D2, ML_D4);
+GStepper2<STEPPER4WIRE_HALF> R_stepper(cSteps, MR_D1, MR_D3, MR_D2, MR_D4);
 
 bool setRGB(uint8_t num, uint8_t r, uint8_t g, uint8_t b);
 
@@ -106,9 +106,9 @@ bool feather(bool pos){
   Serial.println(pos);
 //  setRGB(0,0,255,0);
   if(pos){
-    myservo.write(20);
+    myservo.write(40);
   }else{
-    myservo.write(10);
+    myservo.write(15);
   }
   delay(250);
 //  setRGB(0,0,0,0);
@@ -182,13 +182,13 @@ void setup() {
   L_stepper.autoPower(true);
   R_stepper.autoPower(true);
   R_stepper.reverse(true);
-  L_stepper.setMaxSpeed(2038);
-  L_stepper.setAcceleration(8152);
-  R_stepper.setMaxSpeed(2038);
-  R_stepper.setAcceleration(8152);
+  L_stepper.setMaxSpeed(1200);
+  L_stepper.setAcceleration(1200);
+  R_stepper.setMaxSpeed(1200);
+  R_stepper.setAcceleration(1200);
 
   myservo.attach(SERVO);
-  myservo.write(20);
+  feather(1);
   progReady.test_and_set();
   connected.test_and_set();
 
@@ -197,7 +197,7 @@ void setup() {
 
   //uint32_t settings=preferences.getUInt("s",2565);
 
-  BLEDevice::init("Red Knight");
+  BLEDevice::init("Green Dragon"); //Red Knight Green Dragon
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks);
   BLEDevice::setMTU(517);
