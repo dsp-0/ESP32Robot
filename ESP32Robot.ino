@@ -132,11 +132,6 @@ bool showError(){
   return 1;
 }
 
-//union Cmd{
-//  uint16_t d;
-//  struct{uint16_t command:2; int16_t data:14;} s;
-//};
-
 enum commands{CMD_LINE=0,
               CMD_ANGLE,
               CMD_PEN,
@@ -147,14 +142,7 @@ bool run(){
   setRGB(1,0,170,255);
   auto p=prog;
   for(int i=0;i<prog_len/2;p++,i++){
-/*
-    if (*p&0xC000==0)  // Цикл
-    else if(*p&0xFC00==0x7000) // Условный вход в подпрограмму
-    else if(*p&0xFC00==0x7400) // Условный переход
-    else if(*p&0xFC00==0x7800) // Вход в подпрограмму
-    else if(*p&0xFC00==0x7C00) // Безусловный переход
-*/
-    if((*p&0x8000)==0){
+    if((*p&0x8000)==0){  // Команды цикла и подпрограмм пока не реализованы
       if(showError()) break;
     }
     else if((*p&0xFC00)==0x8000) line((int16_t(*p<<6))>>6); // Движение вперед/назад
@@ -185,28 +173,6 @@ bool run(){
     }
     else if(showError()) break; // Это ошибочный код 
 
-/*
-    case CMD_LINE:
-      line(data);
-      break;
-    case CMD_ANGLE:
-      angle(data);
-      break;
-    case CMD_PEN:
-      feather(data<0);
-      break;
-    case CMD_LED:
-      uint8_t num=data<0;
-      uint8_t tmp=(data>>9)& 0xF;
-      uint8_t r=rbtable[tmp];
-      tmp=(data>>4)& 0x1F;
-      uint8_t g=gtable[tmp];
-      tmp=data& 0xF;
-      uint8_t b=rbtable[tmp];
-      Serial.print("LED "); Serial.print(num); Serial.print(" "); Serial.print(r); Serial.print(" "); Serial.print(g); Serial.print(" "); Serial.println(b);
-      setRGB(!num,r,g,b);
-      break;
-    }*/
   }
   feather(1);
   setRGB(0,255,175,0);
