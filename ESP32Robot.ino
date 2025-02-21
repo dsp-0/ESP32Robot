@@ -3,12 +3,11 @@
 #include <BLEServer.h>
 #include <Preferences.h>
 #include <memory>
-
 #include <Freenove_WS2812_Lib_for_ESP32.h>
-
 #include <GyverStepper2.h>
-
 #include <ESP32Servo.h>
+
+void startOTA(String&);
 
 Servo myservo;  // create servo object to control a servo
                 // 16 servo objects can be created on the ESP32
@@ -30,6 +29,8 @@ const uint8_t gtable[]={0,1,2,3,4,5,6,8,9,10,12,14,16,19,21,25,28,33,38,44,51,59
 
 uint16_t prog[1000];
 uint16_t prog_len=0;
+
+String name;
 
 std::atomic_flag progReady;
 std::atomic_flag connected;
@@ -164,6 +165,9 @@ bool run(){
       else preferences.putShort(param,*(uint16_t*)tmp);
       break;
     }
+    else if(*p==0x87FD){ // Вызвать OTA
+      startOTA(name);
+    }
     else if(*p&0xC000==0xC000){ // Это цвет глаз
       uint16_t data=*p;
       uint8_t num=*p&0x2000;
@@ -228,10 +232,10 @@ void setup() {
   setRGB(0,255,175,0);
   setRGB(1,255,175,0);
 
-  String name = preferences.getString("name", "Clear Turtle");
+  name = preferences.getString("name", "Clear Turtle");
   cDegInAngle=preferences.getUShort("cDegInAngle",314);
 
-  BLEDevice::init("Green Dragon"); //Red Knight Green Dragon
+  BLEDevice::init(name); //Red Knight Green Dragon
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks);
   BLEDevice::setMTU(517);
