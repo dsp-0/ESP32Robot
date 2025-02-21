@@ -27,7 +27,7 @@ void startOTA(String& ssid) {
   Serial.println(IP);
 
   server.on("/", []() {
-    server.send(200, "text/plain", "Hi! This is ElegantOTA Demo.");
+    server.send(200, "text/plain", "Hi! This is turtle bot.");
   });
   
   ElegantOTA.begin(&server);    // Start ElegantOTA

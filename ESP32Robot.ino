@@ -128,6 +128,7 @@ bool setRGB(uint8_t num, uint8_t r, uint8_t g, uint8_t b){
 bool showError(){
   setRGB(0,5,0,0);
   setRGB(1,0,0,0);
+  delay(2000);
   return 1;
 }
 
@@ -153,10 +154,12 @@ bool run(){
     else if(*p&0xFC00==0x7800) // Вход в подпрограмму
     else if(*p&0xFC00==0x7C00) // Безусловный переход
 */
-    if(*p&0x8000==0) if(showError()) break;
-    else if(*p&0xFC00==0x8000) line((int16_t(*p<<6))>>6); // Движение вперед/назад
-    else if(*p&0xFE00==0x8400) angle((int16_t(*p<<7))>>7); // Поворот вправо/влево
-    else if(*p&0xFFFE==0x87FE) feather(!!(*p&1)); // Поднять/опустить перо
+    if((*p&0x8000)==0){
+      if(showError()) break;
+    }
+    else if((*p&0xFC00)==0x8000) line((int16_t(*p<<6))>>6); // Движение вперед/назад
+    else if((*p&0xFE00)==0x8400) angle((int16_t(*p<<7))>>7); // Поворот вправо/влево
+    else if((*p&0xFFFE)==0x87FE) feather(!!(*p&1)); // Поднять/опустить перо
     else if(*p==0x87FC){ // Принять настройки
       auto tmp = (char*)(p+1);
       auto param=tmp;
@@ -168,7 +171,7 @@ bool run(){
     else if(*p==0x87FD){ // Вызвать OTA
       startOTA(name);
     }
-    else if(*p&0xC000==0xC000){ // Это цвет глаз
+    else if((*p&0xC000)==0xC000){ // Это цвет глаз
       uint16_t data=*p;
       uint8_t num=*p&0x2000;
       uint8_t tmp=(data>>9)& 0xF;
