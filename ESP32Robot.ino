@@ -5,6 +5,7 @@
 #include <memory>
 #include <Freenove_WS2812_Lib_for_ESP32.h>
 #include <GyverStepper2.h>
+#include <GyverPlanner.h>
 #include <ESP32Servo.h>
 
 void startOTA(String&);
@@ -69,13 +70,14 @@ const int cSteps=4076;
 const int cMm=100;
 GStepper2<STEPPER4WIRE_HALF> L_stepper(cSteps, ML_D1, ML_D3, ML_D2, ML_D4);
 GStepper2<STEPPER4WIRE_HALF> R_stepper(cSteps, MR_D1, MR_D3, MR_D2, MR_D4);
+GPlanner<STEPPER4WIRE_HALF,2> planner;
 
 bool setRGB(uint8_t num, uint8_t r, uint8_t g, uint8_t b);
 
 bool waitForFinish(){
-  while(!L_stepper.ready()){
-    L_stepper.tick();
-    R_stepper.tick();
+  while(!planner.ready()){
+    planner.tick();
+  //  R_stepper.tick();
   }
   return true;
 }
@@ -84,8 +86,10 @@ bool line(int32_t mm){ //100мм = 360 градусов = 2038 steps
   Serial.print("Line ");
   Serial.println(mm);
 //  setRGB(0,255,0,255);
-  L_stepper.setTarget(mm*cSteps/cMm,RELATIVE);
-  R_stepper.setTarget(mm*cSteps/cMm,RELATIVE);
+  //L_stepper.setTarget(mm*cSteps/cMm,RELATIVE);
+  //R_stepper.setTarget(mm*cSteps/cMm,RELATIVE);
+  int32_t pos[2]={mm*cSteps/cMm,mm*cSteps/cMm};
+  planner.setTarget(pos,RELATIVE);
   waitForFinish();
 //  setRGB(0,0,0,0);
   return true;
@@ -97,8 +101,10 @@ bool angle(int32_t deg){ //314mm - l O between wheel = 360 градусов
   Serial.print("Angle ");
   Serial.println(deg);
 //  setRGB(0,255,255,0);
-  L_stepper.setTarget(deg*cDegInAngle*cSteps/(360*100),RELATIVE);
-  R_stepper.setTarget(-deg*cDegInAngle*cSteps/(360*100),RELATIVE);
+  // L_stepper.setTarget(deg*cDegInAngle*cSteps/(360*100),RELATIVE);
+  // R_stepper.setTarget(-deg*cDegInAngle*cSteps/(360*100),RELATIVE);
+  int32_t pos[2] ={deg*cDegInAngle*cSteps/(360*100),-deg*cDegInAngle*cSteps/(360*100)};
+  planner.setTarget(pos,RELATIVE);
   waitForFinish();
 //  setRGB(0,0,0,0);
   return true;
@@ -140,6 +146,7 @@ enum commands{CMD_LINE=0,
 bool run(){
   setRGB(0,0,170,255);
   setRGB(1,0,170,255);
+  planner.enable();
   auto p=prog;
   for(int i=0;i<prog_len/2;p++,i++){
     if((*p&0x8000)==0){  // Команды цикла и подпрограмм пока не реализованы
@@ -153,10 +160,11 @@ bool run(){
       auto param=tmp;
       tmp+=strlen(param)+1;
       if(param[0]=='n') preferences.putString(param,tmp);
-      else preferences.putShort(param,*(uint16_t*)tmp);
+      else preferences.putUShort(param,*(uint16_t*)tmp);
       break;
     }
     else if(*p==0x87FD){ // Вызвать OTA
+      planner.disable();
       startOTA(name);
     }
     else if((*p&0xC000)==0xC000){ // Это цвет глаз
@@ -171,10 +179,11 @@ bool run(){
       Serial.print("LED "); Serial.print(num); Serial.print(" "); Serial.print(r); Serial.print(" "); Serial.print(g); Serial.print(" "); Serial.println(b);
       setRGB(!num,r,g,b);
     }
-    else if(showError()) break; // Это ошибочный код 
+    else if(showError()) break; // Это ошибочный код
 
   }
   feather(1);
+  planner.disable();
   setRGB(0,255,175,0);
   setRGB(1,255,175,0);
   return true;
@@ -185,13 +194,20 @@ void setup() {
   Serial.begin(115200);
   strip.begin();
 
-  L_stepper.autoPower(true);
-  R_stepper.autoPower(true);
+//  L_stepper.autoPower(true);
+//  R_stepper.autoPower(true);
   R_stepper.reverse(true);
   L_stepper.setMaxSpeed(1200);
   L_stepper.setAcceleration(1200);
   R_stepper.setMaxSpeed(1200);
   R_stepper.setAcceleration(1200);
+
+  planner.addStepper(0, L_stepper);
+  planner.addStepper(1, R_stepper);
+
+  planner.setAcceleration(1200);
+  planner.setMaxSpeed(1200);
+  planner.disable();
 
   myservo.attach(SERVO);
   feather(1);
