@@ -20,8 +20,8 @@ const uint32_t LEDS_COUNT = 2;
 uint8_t LEDS_PIN =	13;
 const uint32_t CHANNEL = 7;
 uint8_t ML_D1=16, ML_D2=17, ML_D3=18, ML_D4=19;
-//uint8_t MR_D1=25, MR_D2=26, MR_D3=27, MR_D4=14;
-uint8_t MR_D1=26, MR_D2=25, MR_D3=14, MR_D4=27;
+uint8_t MR_D1=25, MR_D2=26, MR_D3=27, MR_D4=14;
+//uint8_t MR_D1=26, MR_D2=25, MR_D3=14, MR_D4=27;
 uint8_t SERVO=21;
 
 Freenove_ESP32_WS2812 strip = Freenove_ESP32_WS2812(LEDS_COUNT, LEDS_PIN, CHANNEL, TYPE_RGB);
