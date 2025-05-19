@@ -17,11 +17,12 @@ const BLEUUID SERVICE_UUID = BLEUUID("01942846-0661-7c4a-8953-e76f2ae2e6e2");
 const BLEUUID PROG_CHARACTERISTIC_UUID = BLEUUID("01942846-0761-7c4a-8953-e76f2ae2e6e2");
 
 const uint32_t LEDS_COUNT = 2;
-const uint32_t LEDS_PIN =	13;
+uint8_t LEDS_PIN =	13;
 const uint32_t CHANNEL = 7;
-const uint32_t ML_D1=14, ML_D2=27, ML_D3=26, ML_D4=25;
-const uint32_t MR_D1=16, MR_D2=17, MR_D3=18, MR_D4=19;
-const uint32_t SERVO=21;
+uint8_t ML_D1=16, ML_D2=17, ML_D3=18, ML_D4=19;
+//uint8_t MR_D1=25, MR_D2=26, MR_D3=27, MR_D4=14;
+uint8_t MR_D1=26, MR_D2=25, MR_D3=14, MR_D4=27;
+uint8_t SERVO=21;
 
 Freenove_ESP32_WS2812 strip = Freenove_ESP32_WS2812(LEDS_COUNT, LEDS_PIN, CHANNEL, TYPE_RGB);
 
@@ -37,22 +38,27 @@ std::atomic_flag progReady;
 std::atomic_flag connected;
 Preferences preferences;
 
+uint16_t connId;
 
 class MyServerCallbacks: public BLEServerCallbacks {
-  void onConnect(BLEServer* pServer) {
+  void onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) {
     prog_len=0;
+    connId=param->connect.conn_id;
     connected.clear();
   }
-  void onDisconnect(BLEServer* pServer) {
-    BLEDevice::startAdvertising();
-    progReady.clear();
+  void onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) {
+    if(param->connect.conn_id==connId) {
+      connId=0;
+//      BLEDevice::startAdvertising();
+      progReady.clear();
+    }
   }
 };
 
 class MyCallbacks: public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic *pCharacteristic) {
+  void onWrite(BLECharacteristic *pCharacteristic, esp_ble_gatts_cb_param_t *param) {
     auto cUUID=pCharacteristic->getUUID();
-    if(cUUID.equals(PROG_CHARACTERISTIC_UUID)) {
+    if(cUUID.equals(PROG_CHARACTERISTIC_UUID) && param->write.conn_id==connId) {
       uint8_t* data = pCharacteristic->getData();
       uint16_t len = pCharacteristic->getLength();
       Serial.print("Received bytes: ");
@@ -149,6 +155,7 @@ bool run(){
   planner.enable();
   auto p=prog;
   for(int i=0;i<prog_len/2;p++,i++){
+    Serial.println(*p,BIN);
     if((*p&0x8000)==0){  // Команды цикла и подпрограмм пока не реализованы
       if(showError()) break;
     }
@@ -159,7 +166,20 @@ bool run(){
       auto tmp = (char*)(p+1);
       auto param=tmp;
       tmp+=strlen(param)+1;
-      if(param[0]=='n') preferences.putString(param,tmp);
+      if(param[0]=='n' || param[0]=='p'){
+         preferences.putString(param,tmp);
+         Serial.println(param);
+         Serial.println(int(tmp[0]));
+         Serial.println(int(tmp[1]));
+         Serial.println(int(tmp[2]));
+         Serial.println(int(tmp[3]));
+         Serial.println(int(tmp[4]));
+         Serial.println(int(tmp[5]));
+         Serial.println(int(tmp[6]));
+         Serial.println(int(tmp[7]));
+         Serial.println(int(tmp[8]));
+         Serial.println(int(tmp[9]));
+      }
       else preferences.putUShort(param,*(uint16_t*)tmp);
       break;
     }
@@ -169,7 +189,7 @@ bool run(){
     }
     else if((*p&0xC000)==0xC000){ // Это цвет глаз
       uint16_t data=*p;
-      uint8_t num=*p&0x2000;
+      uint16_t num=*p&0x2000;
       uint8_t tmp=(data>>9)& 0xF;
       uint8_t r=rbtable[tmp];
       tmp=(data>>4)& 0x1F;
@@ -186,6 +206,7 @@ bool run(){
   planner.disable();
   setRGB(0,255,175,0);
   setRGB(1,255,175,0);
+  BLEDevice::startAdvertising();
   return true;
 }
 
@@ -218,7 +239,23 @@ void setup() {
   setRGB(1,255,175,0);
 
   name = preferences.getString("name", "Clear Turtle");
-  cDegInAngle=preferences.getUShort("cDegInAngle",314);
+  cDegInAngle = preferences.getUShort("cDegInAngle",314);
+  String pins = preferences.getString("pins", "\x0D\x10\x11\x12\x13\x19\x1A\x1B\x0E\x15");
+  LEDS_PIN = pins[0];
+  ML_D1=pins[1]; ML_D2=pins[2]; ML_D3=pins[3]; ML_D4=pins[4];
+  MR_D1=pins[5]; MR_D2=pins[6]; MR_D3=pins[7]; MR_D4=pins[8];
+  SERVO=pins[9];
+
+  Serial.println(int(pins[0]));
+  Serial.println(int(pins[1]));
+  Serial.println(int(pins[2]));
+  Serial.println(int(pins[3]));
+  Serial.println(int(pins[4]));
+  Serial.println(int(pins[5]));
+  Serial.println(int(pins[6]));
+  Serial.println(int(pins[7]));
+  Serial.println(int(pins[8]));
+  Serial.println(int(pins[9]));
 
   BLEDevice::init(name); //Red Knight Green Dragon
   BLEServer *pServer = BLEDevice::createServer();
