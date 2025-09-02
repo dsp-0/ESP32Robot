@@ -19,8 +19,8 @@ const BLEUUID PROG_CHARACTERISTIC_UUID = BLEUUID("01942846-0761-7c4a-8953-e76f2a
 const uint32_t LEDS_COUNT = 2;
 uint8_t LEDS_PIN =	13;
 const uint32_t CHANNEL = 7;
-uint8_t ML_D1=16, ML_D2=17, ML_D3=18, ML_D4=19;
-uint8_t MR_D1=25, MR_D2=26, MR_D3=27, MR_D4=14;
+uint8_t ML_D1=19, ML_D2=18, ML_D3=17, ML_D4=16;
+uint8_t MR_D1=14, MR_D2=27, MR_D3=26, MR_D4=25;
 //uint8_t MR_D1=26, MR_D2=25, MR_D3=14, MR_D4=27;
 uint8_t SERVO=21;
 
@@ -37,6 +37,20 @@ String name;
 std::atomic_flag progReady;
 std::atomic_flag connected;
 Preferences preferences;
+
+struct InitPins{
+  InitPins(){
+    preferences.begin("settings");
+//    String pins = preferences.getString("pins", "\x0D\x10\x11\x12\x13\x19\x1A\x1B\x0E\x15");
+    String pins = preferences.getString("pins", "");
+    if(!pins.isEmpty()){
+      LEDS_PIN = pins[0];
+      ML_D1=pins[1]; ML_D2=pins[2]; ML_D3=pins[3]; ML_D4=pins[4];
+      MR_D1=pins[5]; MR_D2=pins[6]; MR_D3=pins[7]; MR_D4=pins[8];
+      SERVO=pins[9];
+    }
+  }
+} initPins;
 
 uint16_t connId;
 
@@ -211,7 +225,6 @@ bool run(){
 }
 
 void setup() {
-  preferences.begin("settings");
   Serial.begin(115200);
   strip.begin();
 
@@ -240,22 +253,6 @@ void setup() {
 
   name = preferences.getString("name", "Clear Turtle");
   cDegInAngle = preferences.getUShort("cDegInAngle",314);
-  String pins = preferences.getString("pins", "\x0D\x10\x11\x12\x13\x19\x1A\x1B\x0E\x15");
-  LEDS_PIN = pins[0];
-  ML_D1=pins[1]; ML_D2=pins[2]; ML_D3=pins[3]; ML_D4=pins[4];
-  MR_D1=pins[5]; MR_D2=pins[6]; MR_D3=pins[7]; MR_D4=pins[8];
-  SERVO=pins[9];
-
-  Serial.println(int(pins[0]));
-  Serial.println(int(pins[1]));
-  Serial.println(int(pins[2]));
-  Serial.println(int(pins[3]));
-  Serial.println(int(pins[4]));
-  Serial.println(int(pins[5]));
-  Serial.println(int(pins[6]));
-  Serial.println(int(pins[7]));
-  Serial.println(int(pins[8]));
-  Serial.println(int(pins[9]));
 
   BLEDevice::init(name); //Red Knight Green Dragon
   BLEServer *pServer = BLEDevice::createServer();
