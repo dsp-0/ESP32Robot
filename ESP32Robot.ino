@@ -24,7 +24,7 @@ uint8_t MR_D1=14, MR_D2=27, MR_D3=26, MR_D4=25;
 //uint8_t MR_D1=26, MR_D2=25, MR_D3=14, MR_D4=27;
 uint8_t SERVO=21;
 
-Freenove_ESP32_WS2812 strip = Freenove_ESP32_WS2812(LEDS_COUNT, LEDS_PIN, CHANNEL, TYPE_RGB);
+Freenove_ESP32_WS2812 *strip;
 
 const uint8_t rbtable[]={0,1,2,3,5,7,11,16,24,35,52,78,116,172,255};
 const uint8_t gtable[]={0,1,2,3,4,5,6,8,9,10,12,14,16,19,21,25,28,33,38,44,51,59,69,81,94,111,130,154,182,215,255};
@@ -37,20 +37,6 @@ String name;
 std::atomic_flag progReady;
 std::atomic_flag connected;
 Preferences preferences;
-
-struct InitPins{
-  InitPins(){
-    preferences.begin("settings");
-//    String pins = preferences.getString("pins", "\x0D\x10\x11\x12\x13\x19\x1A\x1B\x0E\x15");
-    String pins = preferences.getString("pins", "");
-    if(!pins.isEmpty()){
-      LEDS_PIN = pins[0];
-      ML_D1=pins[1]; ML_D2=pins[2]; ML_D3=pins[3]; ML_D4=pins[4];
-      MR_D1=pins[5]; MR_D2=pins[6]; MR_D3=pins[7]; MR_D4=pins[8];
-      SERVO=pins[9];
-    }
-  }
-} initPins;
 
 uint16_t connId;
 
@@ -87,9 +73,9 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 };
 
 const int cSteps=4076;
-const int cMm=100;
-GStepper2<STEPPER4WIRE_HALF> L_stepper(cSteps, ML_D1, ML_D3, ML_D2, ML_D4);
-GStepper2<STEPPER4WIRE_HALF> R_stepper(cSteps, MR_D1, MR_D3, MR_D2, MR_D4);
+const int cMm=106;
+
+GStepper2<STEPPER4WIRE_HALF> *L_stepper, *R_stepper;
 GPlanner<STEPPER4WIRE_HALF,2> planner;
 
 bool setRGB(uint8_t num, uint8_t r, uint8_t g, uint8_t b);
@@ -145,8 +131,8 @@ bool feather(bool pos){
 }
 
 bool setRGB(uint8_t num, uint8_t r, uint8_t g, uint8_t b){
-  strip.setLedColorData(num,r,g,b);
-  strip.show();
+  strip->setLedColorData(num,r,g,b);
+  strip->show();
   delay(10);
   return true;
 }
@@ -177,6 +163,7 @@ bool run(){
     else if((*p&0xFE00)==0x8400) angle((int16_t(*p<<7))>>7); // Поворот вправо/влево
     else if((*p&0xFFFE)==0x87FE) feather(!!(*p&1)); // Поднять/опустить перо
     else if(*p==0x87FC){ // Принять настройки
+      preferences.begin("settings");
       auto tmp = (char*)(p+1);
       auto param=tmp;
       tmp+=strlen(param)+1;
@@ -195,10 +182,13 @@ bool run(){
          Serial.println(int(tmp[9]));
       }
       else preferences.putUShort(param,*(uint16_t*)tmp);
+      preferences.end();
       break;
     }
     else if(*p==0x87FD){ // Вызвать OTA
       planner.disable();
+      setRGB(0,50,0,120);
+      setRGB(1,50,0,120);
       startOTA(name);
     }
     else if((*p&0xC000)==0xC000){ // Это цвет глаз
@@ -225,19 +215,58 @@ bool run(){
 }
 
 void setup() {
+  preferences.begin("settings");
+  name = preferences.getString("name", "Clear Turtle");
+  cDegInAngle = preferences.getUShort("cDegInAngle",0);
+  if(!cDegInAngle){
+    cDegInAngle==297;
+    preferences.putUShort("cDegInAngle",297);
+  }
+  String pins = preferences.getString("pins", "");
+  if(!pins.isEmpty()){
+    LEDS_PIN = pins[0];
+    ML_D1=pins[1]; ML_D2=pins[2]; ML_D3=pins[3]; ML_D4=pins[4];
+    MR_D1=pins[5]; MR_D2=pins[6]; MR_D3=pins[7]; MR_D4=pins[8];
+    SERVO=pins[9];
+  } else {
+    pins="0123456789";
+    pins.setCharAt(0, LEDS_PIN);
+    pins.setCharAt(1, ML_D1);
+    pins.setCharAt(2, ML_D2);
+    pins.setCharAt(3, ML_D3);
+    pins.setCharAt(4, ML_D4);
+    pins.setCharAt(5, MR_D1);
+    pins.setCharAt(6, MR_D2);
+    pins.setCharAt(7, MR_D3);
+    pins.setCharAt(8, MR_D4);
+    pins.setCharAt(9, SERVO);
+    preferences.putString("pins",pins);
+  }
+  preferences.end();
   Serial.begin(115200);
-  strip.begin();
-
+//  Serial.println(2);
+  strip = new Freenove_ESP32_WS2812(LEDS_COUNT, LEDS_PIN, CHANNEL, TYPE_RGB);
+  strip->begin();
+//  Serial.println(3);
+  L_stepper = new GStepper2<STEPPER4WIRE_HALF>(cSteps, ML_D1, ML_D3, ML_D2, ML_D4);
+  R_stepper = new GStepper2<STEPPER4WIRE_HALF>(cSteps, MR_D1, MR_D3, MR_D2, MR_D4);
+  if(!strip || !L_stepper || !R_stepper)
+  {
+    Serial.println("No heap");
+    setRGB(0,255,0,0);
+    setRGB(0,255,0,0);
+    for(;;);
+  }
 //  L_stepper.autoPower(true);
 //  R_stepper.autoPower(true);
-  R_stepper.reverse(true);
-  L_stepper.setMaxSpeed(1200);
-  L_stepper.setAcceleration(1200);
-  R_stepper.setMaxSpeed(1200);
-  R_stepper.setAcceleration(1200);
+  R_stepper->reverse(true);
+  L_stepper->setMaxSpeed(1200);
+  L_stepper->setAcceleration(1200);
+  R_stepper->setMaxSpeed(1200);
+  R_stepper->setAcceleration(1200);
 
-  planner.addStepper(0, L_stepper);
-  planner.addStepper(1, R_stepper);
+  planner.addStepper(0, *L_stepper);
+  planner.addStepper(1, *R_stepper);
 
   planner.setAcceleration(1200);
   planner.setMaxSpeed(1200);
@@ -247,12 +276,11 @@ void setup() {
   feather(1);
   progReady.test_and_set();
   connected.test_and_set();
+//  Serial.println(4);
 
   setRGB(0,255,175,0);
   setRGB(1,255,175,0);
-
-  name = preferences.getString("name", "Clear Turtle");
-  cDegInAngle = preferences.getUShort("cDegInAngle",314);
+  Serial.println(5);
 
   BLEDevice::init(name); //Red Knight Green Dragon
   BLEServer *pServer = BLEDevice::createServer();
@@ -275,6 +303,7 @@ void setup() {
   pAdvertising->setMinPreferred(0x12);
 
   BLEDevice::startAdvertising();
+  Serial.println(6);
 
 }
 
