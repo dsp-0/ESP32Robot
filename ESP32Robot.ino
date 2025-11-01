@@ -159,39 +159,34 @@ bool run(){
   auto p=prog;
   for(int i=0;i<prog_len/2;p++,i++){
     Serial.println(*p,BIN);
-    if((*p&0xFFC0)==0){  // Команды цикла и подпрограмм пока не реализованы
+    if(*p==0){  // команда выхода из ВСЕГО! (цикл, подпрограмма, программа)
+      if(stackIndex==0) break; // команда выхода из программы
+      if(stack[stackIndex-1].cycleCounter==0xFFFF){ // если это выход из подпрограммы
+        i=stack[--stackIndex].returnPos;
+        p=prog+i;
+        stack[stackIndex]={0,0};
+      }else if(stack[stackIndex-1].cycleCounter){ // Если дальше надо ходить по циклу
+        i=stack[stackIndex-1].returnPos;
+        p=prog+i;
+        stack[stackIndex-1].cycleCounter--;
+      }else{ // Если ходить по циклу дальше не надо
+        stackIndex--;
+        stack[stackIndex].returnPos=0;
+      }
+    }else if((*p&0xFFC0)==0){  // Команды цикла
       if((*p&0x003F)!=0){ // Начало цикла
         if(stackIndex>=std::size(stack)-1) if(showError()) break;
         stack[stackIndex].returnPos=i;
         stack[stackIndex].cycleCounter=*p&0x003F;
         stackIndex++;
-      }else{ // Конец цикла
-        if(stackIndex==0) if(showError()) break;
-        if(stack[stackIndex-1].cycleCounter){ // Если дальше надо ходить по циклу
-          i=stack[stackIndex-1].returnPos;
-          p=prog+i;
-          stack[stackIndex-1].cycleCounter--;
-        }else{ // Если ходить по циклу дальше не надо
-          stackIndex--;
-          stack[stackIndex].returnPos=0;
-        }
       }
     }
     else if((*p&0xFC00)==0x4000){  // подпрограммы
-      if((*p&0x03FF)!=0){
-        stack[stackIndex].returnPos=i;
-        stack[stackIndex].cycleCounter=0xFFFF;
-        stackIndex++;
-        i=(*p&0x03FF);
-        p=prog+i; //не проверяем, т.к. проверится в условии цикла
-      }else{
-        if(stackIndex==0) break; //Это команда окончания программы
-        stackIndex--;
-        if(stack[stackIndex].cycleCounter!=0xFFFF) if(showError()) break;
-        i=stack[stackIndex].returnPos;
-        p=prog+i;
-        stack[stackIndex]={0,0};
-      }
+      stack[stackIndex].returnPos=i;
+      stack[stackIndex].cycleCounter=0xFFFF;
+      stackIndex++;
+      i=(*p&0x03FF);
+      p=prog+i; //не проверяем, т.к. проверится в условии цикла
     }
     else if((*p&0xFC00)==0x8000) line((int16_t(*p<<6))>>6); // Движение вперед/назад
     else if((*p&0xFE00)==0x8400) angle((int16_t(*p<<7))>>7); // Поворот вправо/влево
