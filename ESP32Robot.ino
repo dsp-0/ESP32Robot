@@ -218,6 +218,7 @@ bool run(){
       planner.disable();
       setRGB(0,50,0,120);
       setRGB(1,50,0,120);
+      BLEDevice::deinit(true);
       startOTA(name);
     }
     else if((*p&0xC000)==0xC000){ // Это цвет глаз
