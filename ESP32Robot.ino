@@ -7,6 +7,7 @@
 #include <GyverStepper2.h>
 #include <GyverPlanner.h>
 #include <ESP32Servo.h>
+#include "version.h"
 
 void startOTA(String&);
 
@@ -15,6 +16,12 @@ Servo myservo;  // create servo object to control a servo
 
 const BLEUUID SERVICE_UUID = BLEUUID("01942846-0661-7c4a-8953-e76f2ae2e6e2");
 const BLEUUID PROG_CHARACTERISTIC_UUID = BLEUUID("01942846-0761-7c4a-8953-e76f2ae2e6e2");
+// 180A is the standard UUID for the Device Information Service
+//#define SERVICE_UUID_DEVICE_INFO "0000180a-0000-1000-8000-00805f9b34fb"
+const BLEUUID SERVICE_UUID_DEVICE_INFO = BLEUUID(uint16_t(0x180a));
+const BLEUUID CHAR_UUID_MODEL_NUMBER = BLEUUID(uint16_t(0x2A24));
+const BLEUUID CHAR_UUID_FIRMWARE_REVISION = BLEUUID(uint16_t(0x2a26));
+const BLEUUID CHAR_UUID_HARDWARE_REVISION = BLEUUID(uint16_t(0x2a27));
 
 const uint32_t LEDS_COUNT = 2;
 uint8_t LEDS_PIN =	13;
@@ -196,7 +203,7 @@ bool run(){
       auto tmp = (char*)(p+1);
       auto param=tmp;
       tmp+=strlen(param)+1;
-      if(param[0]=='n' || param[0]=='p'){
+      if(param[0]=='n' || param[0]=='p' || param[0]=='h'){ //name or pins or hwVersion
          preferences.putString(param,tmp);
          Serial.println(param);
          Serial.println(int(tmp[0]));
@@ -319,16 +326,37 @@ void setup() {
   BLEDevice::setMTU(517);
 
   BLEService *pService = pServer->createService(SERVICE_UUID);
-  BLECharacteristic *pProgCharacteristic = pService->createCharacteristic(
+  BLECharacteristic *pCharacteristic = pService->createCharacteristic(
                                          PROG_CHARACTERISTIC_UUID,
  //                                        BLECharacteristic::PROPERTY_READ |
                                          BLECharacteristic::PROPERTY_WRITE
                                        );
-  pProgCharacteristic->setCallbacks(new MyCallbacks());
-
+  pCharacteristic->setCallbacks(new MyCallbacks());
   pService->start();
+
+  pService = pServer->createService(SERVICE_UUID_DEVICE_INFO);
+  pCharacteristic = pService->createCharacteristic(
+                      CHAR_UUID_MODEL_NUMBER,
+                      BLECharacteristic::PROPERTY_READ
+                    );
+  pCharacteristic->setValue("Turtle 1");
+  pCharacteristic = pService->createCharacteristic(
+                      CHAR_UUID_FIRMWARE_REVISION,
+                      BLECharacteristic::PROPERTY_READ
+                    );
+  pCharacteristic->setValue(PROGRAM_VERSION);
+  pCharacteristic = pService->createCharacteristic(
+                      CHAR_UUID_HARDWARE_REVISION,
+                      BLECharacteristic::PROPERTY_READ
+                    );
+  String hwVersion = preferences.getString("hwVersion", "");
+  if(hwVersion.isEmpty()) hwVersion="0.0.0";
+  pCharacteristic->setValue(hwVersion);
+  pService->start();
+
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->addServiceUUID(SERVICE_UUID_DEVICE_INFO);
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
   pAdvertising->setMaxPreferred(0x12);
