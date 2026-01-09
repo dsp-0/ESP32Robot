@@ -7,7 +7,6 @@
 #include <GyverStepper2.h>
 #include <GyverPlanner.h>
 #include <ESP32Servo.h>
-#include "version.h"
 
 void startOTA(String&);
 
@@ -16,12 +15,6 @@ Servo myservo;  // create servo object to control a servo
 
 const BLEUUID SERVICE_UUID = BLEUUID("01942846-0661-7c4a-8953-e76f2ae2e6e2");
 const BLEUUID PROG_CHARACTERISTIC_UUID = BLEUUID("01942846-0761-7c4a-8953-e76f2ae2e6e2");
-// 180A is the standard UUID for the Device Information Service
-//#define SERVICE_UUID_DEVICE_INFO "0000180a-0000-1000-8000-00805f9b34fb"
-const BLEUUID SERVICE_UUID_DEVICE_INFO = BLEUUID(uint16_t(0x180a));
-const BLEUUID CHAR_UUID_MODEL_NUMBER = BLEUUID(uint16_t(0x2A24));
-const BLEUUID CHAR_UUID_FIRMWARE_REVISION = BLEUUID(uint16_t(0x2a26));
-const BLEUUID CHAR_UUID_HARDWARE_REVISION = BLEUUID(uint16_t(0x2a27));
 
 const uint32_t LEDS_COUNT = 2;
 uint8_t LEDS_PIN =	13;
@@ -156,9 +149,6 @@ enum commands{CMD_LINE=0,
               CMD_PEN,
               CMD_LED};
 
-struct[[gnu::packed]] {uint16_t returnPos, cycleCounter;} stack[100];
-uint16_t stackIndex;
-
 bool run(){
   setRGB(0,0,170,255);
   setRGB(1,0,170,255);
@@ -166,34 +156,8 @@ bool run(){
   auto p=prog;
   for(int i=0;i<prog_len/2;p++,i++){
     Serial.println(*p,BIN);
-    if(*p==0){  // команда выхода из ВСЕГО! (цикл, подпрограмма, программа)
-      if(stackIndex==0) break; // команда выхода из программы
-      if(stack[stackIndex-1].cycleCounter==0xFFFF){ // если это выход из подпрограммы
-        i=stack[--stackIndex].returnPos;
-        p=prog+i;
-        stack[stackIndex]={0,0};
-      }else if(stack[stackIndex-1].cycleCounter){ // Если дальше надо ходить по циклу
-        i=stack[stackIndex-1].returnPos;
-        p=prog+i;
-        stack[stackIndex-1].cycleCounter--;
-      }else{ // Если ходить по циклу дальше не надо
-        stackIndex--;
-        stack[stackIndex].returnPos=0;
-      }
-    }else if((*p&0xFFC0)==0){  // Команды цикла
-      if((*p&0x003F)!=0){ // Начало цикла
-        if(stackIndex>=std::size(stack)-1) if(showError()) break;
-        stack[stackIndex].returnPos=i;
-        stack[stackIndex].cycleCounter=*p&0x003F;
-        stackIndex++;
-      }
-    }
-    else if((*p&0xFC00)==0x4000){  // подпрограммы
-      stack[stackIndex].returnPos=i;
-      stack[stackIndex].cycleCounter=0xFFFF;
-      stackIndex++;
-      i=(*p&0x03FF);
-      p=prog+i; //не проверяем, т.к. проверится в условии цикла
+    if((*p&0x8000)==0){  // Команды цикла и подпрограмм пока не реализованы
+      if(showError()) break;
     }
     else if((*p&0xFC00)==0x8000) line((int16_t(*p<<6))>>6); // Движение вперед/назад
     else if((*p&0xFE00)==0x8400) angle((int16_t(*p<<7))>>7); // Поворот вправо/влево
@@ -203,7 +167,7 @@ bool run(){
       auto tmp = (char*)(p+1);
       auto param=tmp;
       tmp+=strlen(param)+1;
-      if(param[0]=='n' || param[0]=='p' || param[0]=='h'){ //name or pins or hwVersion
+      if(param[0]=='n' || param[0]=='p'){
          preferences.putString(param,tmp);
          Serial.println(param);
          Serial.println(int(tmp[0]));
@@ -225,8 +189,10 @@ bool run(){
       planner.disable();
       setRGB(0,50,0,120);
       setRGB(1,50,0,120);
-      BLEDevice::deinit(true);
-      startOTA(name);
+//      startOTA(name);
+      myservo.detach();
+      String up("UpdateESP");
+      startOTA(up);
     }
     else if((*p&0xC000)==0xC000){ // Это цвет глаз
       uint16_t data=*p;
@@ -243,7 +209,6 @@ bool run(){
     else if(showError()) break; // Это ошибочный код
 
   }
-  stackIndex=0;
   feather(1);
   planner.disable();
   setRGB(0,255,175,0);
@@ -280,8 +245,6 @@ void setup() {
     pins.setCharAt(9, SERVO);
     preferences.putString("pins",pins);
   }
-  String hwVersion = preferences.getString("hwVersion", "");
-  if(hwVersion.isEmpty()) hwVersion="0.0.0";
   preferences.end();
   Serial.begin(115200);
 //  Serial.println(2);
@@ -328,38 +291,19 @@ void setup() {
   BLEDevice::setMTU(517);
 
   BLEService *pService = pServer->createService(SERVICE_UUID);
-  BLECharacteristic *pCharacteristic = pService->createCharacteristic(
+  BLECharacteristic *pProgCharacteristic = pService->createCharacteristic(
                                          PROG_CHARACTERISTIC_UUID,
  //                                        BLECharacteristic::PROPERTY_READ |
                                          BLECharacteristic::PROPERTY_WRITE
                                        );
-  pCharacteristic->setCallbacks(new MyCallbacks());
-  pService->start();
+  pProgCharacteristic->setCallbacks(new MyCallbacks());
 
-  pService = pServer->createService(SERVICE_UUID_DEVICE_INFO);
-  pCharacteristic = pService->createCharacteristic(
-                      CHAR_UUID_MODEL_NUMBER,
-                      BLECharacteristic::PROPERTY_READ
-                    );
-  pCharacteristic->setValue("Turtle 1");
-  pCharacteristic = pService->createCharacteristic(
-                      CHAR_UUID_FIRMWARE_REVISION,
-                      BLECharacteristic::PROPERTY_READ
-                    );
-  pCharacteristic->setValue(PROGRAM_VERSION);
-  pCharacteristic = pService->createCharacteristic(
-                      CHAR_UUID_HARDWARE_REVISION,
-                      BLECharacteristic::PROPERTY_READ
-                    );
-  pCharacteristic->setValue(hwVersion);
   pService->start();
-
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->addServiceUUID(SERVICE_UUID_DEVICE_INFO);
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
-  pAdvertising->setMaxPreferred(0x12);
+  pAdvertising->setMinPreferred(0x12);
 
   BLEDevice::startAdvertising();
   Serial.println(6);
