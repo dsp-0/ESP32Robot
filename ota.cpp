@@ -20,7 +20,7 @@
 
 WebServer server(80);
 
-void startOTA(String& ssid) {
+void startOTA() {
   WiFi.softAP("ESP32upd", "");
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
