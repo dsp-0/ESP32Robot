@@ -3,5 +3,6 @@
     "board": "esp32:esp32:esp32da",
     "sketch": "ESP32Robot.ino",
     "output": "./build",
-    "prebuild": "getversion.py"
+    "prebuild": "getversion.py",
+    "port": "COM8"
 }

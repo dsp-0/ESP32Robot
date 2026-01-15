@@ -1,0 +1,1 @@
+C:\Users\User\AppData\Local\Arduino15\packages\esp32\tools\esptool_py\5.1.0\esptool.exe -p COM8 -b 921600 write-flash -fm qio 0 build/ESP32Robot.ino.merged.bin 
